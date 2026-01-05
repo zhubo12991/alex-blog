@@ -1,0 +1,19 @@
+{
+  "name": "alex-blog",
+  "version": "1.0.0",
+  "description": "Personal tech blog with modern design",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
+  "keywords": ["blog", "nodejs", "web"],
+  "author": "Alex Chen",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  }
+}
+
+

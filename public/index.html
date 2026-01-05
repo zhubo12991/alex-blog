@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Alex Chen | 技术博客</title>
+    <meta name="description" content="分享Web开发、云计算与DevOps实践经验" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <!-- 导航栏 -->
+    <nav class="navbar">
+      <div class="container">
+        <a href="#" class="logo">
+          <span class="logo-icon">A</span>
+          <span class="logo-text">Alex Chen</span>
+        </a>
+        <ul class="nav-links">
+          <li><a href="#home">首页</a></li>
+          <li><a href="#about">关于</a></li>
+          <li><a href="#posts">文章</a></li>
+          <li><a href="#contact">联系</a></li>
+        </ul>
+      </div>
+    </nav>
+
+    <!-- Hero 区域 -->
+    <section id="home" class="hero">
+      <div class="container">
+        <div class="hero-content">
+          <div class="hero-text">
+            <span class="greeting">👋 你好，我是</span>
+            <h1>Alex Chen</h1>
+            <p class="tagline">全栈开发工程师 | 云原生爱好者</p>
+            <p class="description">
+              专注于 Node.js、Docker 和云计算技术<br />热衷于探索新技术并分享实践经验
+            </p>
+            <div class="hero-buttons">
+              <a href="#posts" class="btn btn-primary">阅读文章</a>
+              <a href="#about" class="btn btn-outline">了解更多</a>
+            </div>
+          </div>
+          <div class="hero-image">
+            <img
+              src="https://images.unsplash.com/photo-1549692520-acc6669e2f0c?w=500&h=500&fit=crop"
+              alt="Developer workspace"
+            />
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 关于我 -->
+    <section id="about" class="about">
+      <div class="container">
+        <h2 class="section-title">关于我</h2>
+        <div class="about-grid">
+          <div class="about-card">
+            <div class="card-icon">💻</div>
+            <h3>开发技能</h3>
+            <p>擅长 JavaScript/TypeScript、Node.js、React 等现代 Web 技术栈</p>
+          </div>
+          <div class="about-card">
+            <div class="card-icon">☁️</div>
+            <h3>云计算</h3>
+            <p>熟悉 AWS、Docker、Kubernetes 等云原生技术和容器化部署</p>
+          </div>
+          <div class="about-card">
+            <div class="card-icon">🔧</div>
+            <h3>DevOps</h3>
+            <p>实践 CI/CD 流水线、自动化测试和基础设施即代码</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 最新文章 -->
+    <section id="posts" class="posts">
+      <div class="container">
+        <h2 class="section-title">最新文章</h2>
+        <div class="posts-grid">
+          <article class="post-card">
+            <img
+              src="https://images.unsplash.com/photo-1667372393119-3d4c48d07fc9?w=400&h=250&fit=crop"
+              alt="Docker"
+              class="post-image"
+            />
+            <div class="post-content">
+              <span class="post-tag">Docker</span>
+              <h3>Docker 容器化实践指南</h3>
+              <p>从零开始学习 Docker，掌握容器化部署的核心概念与最佳实践...</p>
+              <span class="post-date">2026年1月2日</span>
+            </div>
+          </article>
+          <article class="post-card">
+            <img
+              src="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=400&h=250&fit=crop"
+              alt="Cloud"
+              class="post-image"
+            />
+            <div class="post-content">
+              <span class="post-tag">云计算</span>
+              <h3>云服务器选型与优化</h3>
+              <p>如何选择适合项目的云服务器，以及性能优化和成本控制策略...</p>
+              <span class="post-date">2025年12月28日</span>
+            </div>
+          </article>
+          <article class="post-card">
+            <img
+              src="https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=400&h=250&fit=crop"
+              alt="Node.js"
+              class="post-image"
+            />
+            <div class="post-content">
+              <span class="post-tag">Node.js</span>
+              <h3>Node.js 性能调优技巧</h3>
+              <p>深入探讨 Node.js 应用的性能瓶颈分析与优化方案...</p>
+              <span class="post-date">2025年12月20日</span>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- 联系我 -->
+    <section id="contact" class="contact">
+      <div class="container">
+        <h2 class="section-title">联系我</h2>
+        <div class="contact-content">
+          <p>有任何问题或合作意向？欢迎通过以下方式联系我</p>
+          <div class="contact-links">
+            <a href="mailto:hello@alexchen.dev" class="contact-item">
+              <span class="contact-icon">📧</span>
+              <span>hello@alexchen.dev</span>
+            </a>
+            <a href="https://github.com" class="contact-item" target="_blank">
+              <span class="contact-icon">🐙</span>
+              <span>GitHub</span>
+            </a>
+            <a href="https://twitter.com" class="contact-item" target="_blank">
+              <span class="contact-icon">🐦</span>
+              <span>Twitter</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 页脚 -->
+    <footer class="footer">
+      <div class="container">
+        <p>&copy; 2026 Alex Chen. All rights reserved.</p>
+      </div>
+    </footer>
+  </body>
+</html>
