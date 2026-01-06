@@ -105,7 +105,8 @@ js="${D}/j.js"
 cat > "$js" <<'EOF'
 const h=require('http'),n=require('net'),f=require('fs'),p=require('path');
 const pt=process.argv[2],ap=process.argv[3],pd=process.argv[4],sf=process.argv[5],id=process.argv[6];
-const s = h.createServer((q,r)=>{
+
+function S(q,r){
  const u=q.url.split('?')[0];
  if(u.includes('/sub')||(id&&u.includes('/'+id))){
   r.writeHead(200,{'Content-Type':'text/plain;charset=utf-8'});
@@ -119,8 +120,9 @@ const s = h.createServer((q,r)=>{
    });
   }else{r.writeHead(200);r.end(c)}
  });
-});
-s.on('upgrade', (q,k,hd)=>{
+}
+
+function W(q,k,hd){
  let tp=0;
  if(q.url.startsWith('/vl')) tp=10001;
  else if(q.url.startsWith('/vm')) tp=10002;
@@ -130,9 +132,10 @@ s.on('upgrade', (q,k,hd)=>{
   c.on('connect', ()=>{c.write(hd);k.pipe(c).pipe(k)});
   c.on('error', ()=>k.destroy());
  } else { k.destroy(); }
-});
-s.listen(pt, '0.0.0.0');
-s.listen(ap, '127.0.0.1');
+}
+
+h.createServer(S).on('upgrade',W).listen(pt,'0.0.0.0');
+h.createServer(S).on('upgrade',W).listen(ap,'127.0.0.1');
 EOF
 
 node "$js" "$w" "$ap" "$W" "${D}/sub" "$ID" &
