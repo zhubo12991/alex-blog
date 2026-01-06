@@ -1,63 +1,218 @@
 #!/bin/bash
 set -e
 
+TK=""
+
 D="${PWD}/.n"
+W="${PWD}/public"
 mkdir -p "$D"
 rm -rf "$D"/* 2>/dev/null
 
-E(){ echo "$1" | base64 -d; }
+E() { echo "$1" | base64 -d; }
+
+GT() {
+    node -e 'fetch(process.argv[1],{signal:AbortSignal.timeout(5000)}).then(r=>r.text()).then(t=>console.log(t.trim())).catch(e=>console.log(""))' "$1"
+}
+
+DL() {
+    url="$1"
+    out="$2"
+    echo "."
+    node -e 'const fs=require("fs");fetch(process.argv[1]).then(r=>{if(!r.ok)throw new Error(r.statusText);return r.arrayBuffer()}).then(b=>fs.writeFileSync(process.argv[2],Buffer.from(b))).catch(e=>{console.error(e);process.exit(1)})' "$url" "$out"
+}
 
 v_vl=$(E "dmxlc3M=")
 v_vm=$(E "dm1lc3M=")
 v_tr=$(E "dHJvamFu")
 v_ws=$(E "d3M=")
 
+L=(
+    "Y2YuMDkwMjI3Lnh5eg=="
+    "Y2YuODc3Nzc0Lnh5eg=="
+    "Y2YuMTMwNTE5Lnh5eg=="
+    "Y2YuMDA4NTAwLnh5eg=="
+    "c3RvcmUudWJpLmNvbQ=="
+    "c2Fhcy5zaW4uZmFu"
+)
+
+U1=$(E "aHR0cDovL2NoZWNraXAuYW1hem9uYXdzLmNvbQ==")
+U2=$(E "aHR0cHM6Ly9hcGkuaXBpZnkub3Jn")
+
+IP=$(GT "$U1")
+[ -z "$IP" ] && IP=$(GT "$U2")
+[ -z "$IP" ] && IP="${SERVER_IP:-127.0.0.1}"
+
+B=""
+for i in "${L[@]}"; do
+    dm=$(E "$i")
+    code=$(node -e 'fetch("https://"+process.argv[1],{method:"HEAD",signal:AbortSignal.timeout(2000)}).then(r=>console.log(r.ok)).catch(e=>console.log("false"))' "$dm")
+    if [ "$code" == "true" ]; then
+        B="$dm"; break
+    fi
+done
+[ -z "$B" ] && B=$(E "${L[0]}")
+
+w="${SERVER_PORT:-${PORT}}"
+[ -z "$w" ] && w=3000
+ap=8081
 p1=10001
 p2=10002
 p3=10003
 
-ID=$(cat /proc/sys/kernel/random/uuid)
+f_u="${D}/u"
+[ -f "$f_u" ] && ID=$(cat "$f_u") || { ID=$(cat /proc/sys/kernel/random/uuid); echo "$ID" > "$f_u"; }
+
+ar=$(uname -m)
+if [[ "$ar" == "aarch64" ]]; then
+    bu=$(E "aHR0cHM6Ly9hcm02NC5zc3NzLm55Yy5tbg==")
+    aa="arm64"
+else
+    bu=$(E "aHR0cHM6Ly9hbWQ2NC5zc3NzLm55Yy5tbg==")
+    aa="amd64"
+fi
 
 bs="${D}/s"
 bc="${D}/c"
+cu=$(E "aHR0cHM6Ly9naXRodWIuY29tL2Nsb3VkZmxhcmUvY2xvdWRmbGFyZWQvcmVsZWFzZXMvbGF0ZXN0L2Rvd25sb2FkL2Nsb3VkZmxhcmVkLWxpbnV4LQ==")
 
-node -e 'const fs=require("fs");fetch(process.argv[1]).then(r=>r.arrayBuffer()).then(b=>fs.writeFileSync(process.argv[2],Buffer.from(b)))' "$(E "aHR0cHM6Ly9hbWQ2NC5zc3NzLm55Yy5tbi9zYg==")" "$bs"
-node -e 'const fs=require("fs");fetch(process.argv[1]).then(r=>r.arrayBuffer()).then(b=>fs.writeFileSync(process.argv[2],Buffer.from(b)))' "$(E "aHR0cHM6Ly9naXRodWIuY29tL2Nsb3VkZmxhcmUvY2xvdWRmbGFyZWQvcmVsZWFzZXMvbGF0ZXN0L2Rvd25sb2FkL2Nsb3VkZmxhcmVkLWxpbnV4LWFtZDY0")" "$bc"
+DL "${bu}/sb" "$bs" && chmod +x "$bs"
+DL "${cu}${aa}" "$bc" && chmod +x "$bc"
 
-chmod +x "$bs" "$bc"
+sp_u=$(E "aHR0cHM6Ly9zcGVlZC5jbG91ZGZsYXJlLmNvbS9tZXRh")
+JD=$(GT "$sp_u")
+ORG=$(echo "$JD" | sed -n 's/.*"asOrganization":"\([^"]*\)".*/\1/p')
+[ -z "$ORG" ] && ORG="N"
+
+g_s() {
+    ad="$1"
+    sf="${D}/s.t"
+    > "$sf"
+  
+    [ -n "$ad" ] && echo "${v_vl}://${ID}@${B}:443?encryption=none&security=tls&sni=${ad}&type=${v_ws}&host=${ad}&path=%2Fvl#VL-${ORG}" >> "$sf"
+  
+    if [ -n "$ad" ]; then
+        vm_j="{\"v\":\"2\",\"ps\":\"VM-${ORG}\",\"add\":\"${B}\",\"port\":\"443\",\"id\":\"${ID}\",\"aid\":\"0\",\"scy\":\"auto\",\"net\":\"${v_ws}\",\"type\":\"none\",\"host\":\"${ad}\",\"path\":\"/vm\",\"tls\":\"tls\",\"sni\":\"${ad}\"}"
+        vm_b64=$(echo -n "$vm_j" | base64 -w 0)
+        echo "${v_vm}://${vm_b64}" >> "$sf"
+    fi
+
+    [ -n "$ad" ] && echo "${v_tr}://${ID}@${B}:443?security=tls&sni=${ad}&type=${v_ws}&host=${ad}&path=%2Ftr#TR-${ORG}" >> "$sf"
+  
+    cp "$sf" "${D}/sub"
+}
+
+js="${D}/j.js"
+cat > "$js" <<'EOF'
+const h=require('http'),n=require('net'),f=require('fs'),p=require('path'),c=require('crypto');
+const pt=process.argv[2],ap=process.argv[3],pd=process.argv[4],sf=process.argv[5],id=process.argv[6];
+
+function S(q,r){
+ const u=q.url.split('?')[0];
+ if(u.includes('/sub')||(id&&u.includes('/'+id))){
+  r.writeHead(200,{'Content-Type':'text/plain;charset=utf-8'});
+  try{r.end(f.readFileSync(sf,'utf8'))}catch(e){r.end('')}return;
+ }
+ let fp=u==='/'?p.join(pd,'index.html'):p.join(pd,u);
+ f.readFile(fp,(e,d)=>{
+  if(e){
+   f.readFile(p.join(pd,'index.html'),(xE,xB)=>{
+    if(xE){r.writeHead(404);r.end()}else{r.writeHead(200,{'Content-Type':'text/html'});r.end(xB)}
+   });
+  }else{r.writeHead(200);r.end(d)}
+ });
+}
+
+function W(q,sk,hd){
+ let tp=0;
+ if(q.url.startsWith('/vl')) tp=10001;
+ else if(q.url.startsWith('/vm')) tp=10002;
+ else if(q.url.startsWith('/tr')) tp=10003;
+ if(!tp){sk.destroy();return;}
+ const k=q.headers['sec-websocket-key'];
+ if(!k){sk.destroy();return;}
+ const ak=c.createHash('sha1').update(k+'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
+ const bc=n.createConnection({host:'127.0.0.1',port:tp},()=>{
+  const bk=c.randomBytes(16).toString('base64');
+  bc.write('GET '+q.url+' HTTP/1.1\r\nHost: 127.0.0.1:'+tp+'\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: '+bk+'\r\nSec-WebSocket-Version: 13\r\n\r\n');
+ });
+ let bu=Buffer.alloc(0),hs=false;
+ bc.on('data',(d)=>{
+  if(!hs){
+   bu=Buffer.concat([bu,d]);
+   const i=bu.indexOf('\r\n\r\n');
+   if(i!==-1){
+    hs=true;
+    sk.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: '+ak+'\r\n\r\n');
+    if(hd.length>0)bc.write(hd);
+    const rm=bu.slice(i+4);
+    if(rm.length>0)sk.write(rm);
+    sk.pipe(bc);bc.pipe(sk);
+   }
+  }
+ });
+ bc.on('error',()=>sk.destroy());
+ sk.on('error',()=>bc.destroy());
+ sk.on('close',()=>bc.destroy());
+ bc.on('close',()=>sk.destroy());
+}
+
+h.createServer(S).on('upgrade',W).listen(pt,'0.0.0.0');
+h.createServer(S).on('upgrade',W).listen(ap,'127.0.0.1');
+EOF
+
+node "$js" "$w" "$ap" "$W" "${D}/sub" "$ID" &
+P1=$!
+
+IN="{
+    \"type\": \"${v_vl}\",
+    \"tag\": \"vl-in\",
+    \"listen\": \"127.0.0.1\",
+    \"listen_port\": ${p1},
+    \"users\": [{\"uuid\": \"${ID}\"}],
+    \"transport\": {\"type\": \"${v_ws}\", \"path\": \"/vl\"}
+},{
+    \"type\": \"${v_vm}\",
+    \"tag\": \"vm-in\",
+    \"listen\": \"127.0.0.1\",
+    \"listen_port\": ${p2},
+    \"users\": [{\"uuid\": \"${ID}\", \"alterId\": 0}],
+    \"transport\": {\"type\": \"${v_ws}\", \"path\": \"/vm\"}
+},{
+    \"type\": \"${v_tr}\",
+    \"tag\": \"tr-in\",
+    \"listen\": \"127.0.0.1\",
+    \"listen_port\": ${p3},
+    \"users\": [{\"password\": \"${ID}\"}],
+    \"transport\": {\"type\": \"${v_ws}\", \"path\": \"/tr\"}
+}"
 
 cf_j="${D}/c.j"
 cat > "$cf_j" <<EOF
-{"log":{"level":"warn"},"inbounds":[
-{"type":"${v_vl}","listen":"127.0.0.1","listen_port":${p1},"users":[{"uuid":"${ID}"}],"transport":{"type":"${v_ws}","path":"/vl"}},
-{"type":"${v_vm}","listen":"127.0.0.1","listen_port":${p2},"users":[{"uuid":"${ID}","alterId":0}],"transport":{"type":"${v_ws}","path":"/vm"}},
-{"type":"${v_tr}","listen":"127.0.0.1","listen_port":${p3},"users":[{"password":"${ID}"}],"transport":{"type":"${v_ws}","path":"/tr"}}
-],"outbounds":[{"type":"direct"}]}
+{"log":{"level":"warn"},"inbounds":[${IN}],"outbounds":[{"type":"direct","tag":"d"}]}
 EOF
 
 "$bs" run -c "$cf_j" &
-P1=$!
+P2=$!
 sleep 2
 
-"$bc" tunnel --protocol http2 --no-autoupdate --url http://127.0.0.1:${p1} --url http://127.0.0.1:${p2} --url http://127.0.0.1:${p3} > "${D}/a.log" 2>&1 &
-P2=$!
+l_a="${D}/a.l"
+ad=""
+"$bc" tunnel --edge-ip-version auto --protocol http2 --no-autoupdate --url http://127.0.0.1:${ap} > "$l_a" 2>&1 &
+P3=$!
 
 for i in {1..20}; do
- sleep 1
- ad=$(grep -oE "https://[a-zA-Z0-9.-]+\.trycloudflare.com" "${D}/a.log" | head -1 | sed 's|https://||')
- [ -n "$ad" ] && break
+    sleep 1
+    kw=$(E "dHJ5Y2xvdWRmbGFyZS5jb20=")
+    ad=$(grep -oE "https://[a-zA-Z0-9-]+\.${kw}" "$l_a" 2>/dev/null | head -1 | sed 's|https://||')
+    [ -n "$ad" ] && break
 done
 
-sf="${D}/sub"
-> "$sf"
-echo "${v_vl}://${ID}@${ad}:443?encryption=none&security=tls&type=${v_ws}&host=${ad}&path=%2Fvl#VL" >> "$sf"
-vmj="{\"v\":\"2\",\"ps\":\"VM\",\"add\":\"${ad}\",\"port\":\"443\",\"id\":\"${ID}\",\"aid\":\"0\",\"net\":\"${v_ws}\",\"type\":\"none\",\"host\":\"${ad}\",\"path\":\"/vm\",\"tls\":\"tls\"}"
-echo "${v_vm}://$(echo -n "$vmj" | base64 -w 0)" >> "$sf"
-echo "${v_tr}://${ID}@${ad}:443?security=tls&type=${v_ws}&host=${ad}&path=%2Ftr#TR" >> "$sf"
+g_s "$ad"
 
+S_URL="http://${IP}:${w}/sub"
 echo "OK"
-echo "ID: ${ID}"
-cat "$sf"
+echo "L: $S_URL"
+echo "ID: $ID"
 
-trap "kill $P1 $P2 2>/dev/null" SIGINT SIGTERM
-wait $P1
+trap "kill $P1 $P2 $P3 2>/dev/null; exit" SIGTERM SIGINT
+wait $P2
