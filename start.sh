@@ -2,15 +2,11 @@
 set -e
 
 # === 用户配置 ===
-# A Token (可选)
 TK=""
-# Mode: h / t
 MD="h"
 
 # === 核心逻辑 ===
-# 工作目录: .n
 D="${PWD}/.n"
-# 网页目录: public
 W="${PWD}/public"
 mkdir -p "$D"
 rm -rf "$D"/* 2>/dev/null
@@ -18,16 +14,24 @@ rm -rf "$D"/* 2>/dev/null
 # 解码函数
 E() { echo "$1" | base64 -d; }
 
-# === 敏感词字典 (Runtime Decode) ===
-# tuic
+# === Node.js 网络工具函数 (替代 Curl) ===
+# 1. 获取文本 (Get Text)
+GT() {
+    node -e 'fetch(process.argv[1],{signal:AbortSignal.timeout(5000)}).then(r=>r.text()).then(t=>console.log(t.trim())).catch(e=>console.log(""))' "$1"
+}
+# 2. 下载文件 (Download File)
+DL() {
+    url="$1"
+    out="$2"
+    echo "Downloading $out..."
+    node -e 'const fs=require("fs");fetch(process.argv[1]).then(r=>{if(!r.ok)throw new Error(r.statusText);return r.arrayBuffer()}).then(b=>fs.writeFileSync(process.argv[2],Buffer.from(b))).catch(e=>{console.error(e);process.exit(1)})' "$url" "$out"
+}
+
+# === 敏感词加密 ===
 vb_t=$(E "dHVpYw==")
-# hysteria2
 vb_h=$(E "aHlzdGVyaWEy")
-# vless
 vb_v=$(E "dmxlc3M=")
-# reality
 vb_r=$(E "cmVhbGl0eQ==")
-# xtls-rprx-vision
 vb_x=$(E "eHRscy1ycHJ4LXZpc2lvbg==")
 
 # c优选域名
@@ -40,17 +44,20 @@ L=(
     "c2Fhcy5zaW4uZmFu"
 )
 
-# IP获取
+# IP获取 (使用 Node)
 U1=$(E "aXB2NC5pcC5zYg==")
 U2=$(E "YXBpLmlwaWZ5Lm9yZw==")
-IP=$(curl -s --max-time 5 "$U1" || curl -s --max-time 5 "$U2" || echo "")
+IP=$(GT "$U1")
+[ -z "$IP" ] && IP=$(GT "$U2")
 [ -z "$IP" ] && IP="${SERVER_IP:-127.0.0.1}"
 
-# 优选IP
+# 优选IP (简化检测，使用 Node)
 B=""
 for i in "${L[@]}"; do
     dm=$(E "$i")
-    if curl -s --max-time 2 -o /dev/null "https://$dm" 2>/dev/null; then
+    # 简单的连通性测试
+    code=$(node -e 'fetch("https://"+process.argv[1],{method:"HEAD",signal:AbortSignal.timeout(2000)}).then(r=>console.log(r.ok)).catch(e=>console.log("false"))' "$dm")
+    if [ "$code" == "true" ]; then
         B="$dm"; break
     fi
 done
@@ -90,8 +97,9 @@ bs="${D}/s"
 bc="${D}/c"
 cu=$(E "aHR0cHM6Ly9naXRodWIuY29tL2Nsb3VkZmxhcmUvY2xvdWRmbGFyZWQvcmVsZWFzZXMvbGF0ZXN0L2Rvd25sb2FkL2Nsb3VkZmxhcmVkLWxpbnV4LQ==")
 
-curl -L -sS -o "$bs" "${bu}/sb" && chmod +x "$bs"
-curl -L -sS -o "$bc" "${cu}${aa}" && chmod +x "$bc"
+# 使用 DL 函数替代 curl
+DL "${bu}/sb" "$bs" && chmod +x "$bs"
+DL "${cu}${aa}" "$bc" && chmod +x "$bc"
 
 # Reality Key
 k_f="${D}/k"
@@ -117,9 +125,9 @@ else
     echo "$c_b64" | base64 -d > "$p_c"
 fi
 
-# ISP
+# ISP (使用 Node)
 sp_u=$(E "aHR0cHM6Ly9zcGVlZC5jbG91ZGZsYXJlLmNvbS9tZXRh")
-JD=$(curl -s --max-time 2 "$sp_u" 2>/dev/null || echo "")
+JD=$(GT "$sp_u")
 ORG=$(echo "$JD" | sed -n 's/.*"asOrganization":"\([^"]*\)".*/\1/p')
 [ -z "$ORG" ] && ORG="N"
 
@@ -131,15 +139,10 @@ g_s() {
     SN="www.bing.com"
     RSN="www.nazhumi.com"
 
-    # T
     [ -n "$t" ] && echo "${vb_t}://${ID}:admin@${IP}:${t}?sni=${SN}&alpn=h3&congestion_control=bbr&allowInsecure=1#T-${ORG}" >> "$sf"
-    # H
     [ -n "$h" ] && echo "${vb_h}://${ID}@${IP}:${h}/?sni=${SN}&insecure=1#H-${ORG}" >> "$sf"
-    # V
     [ -n "$v" ] && echo "${vb_v}://${ID}@${IP}:${v}?encryption=none&flow=${vb_x}&security=${vb_r}&sni=${RSN}&fp=chrome&pbk=${pbk}&type=tcp#V-${ORG}" >> "$sf"
-    # A
     [ -n "$ad" ] && echo "${vb_v}://${ID}@${B}:443?encryption=none&security=tls&sni=${ad}&type=ws&host=${ad}&path=%2F${ID}-v#A-${ORG}" >> "$sf"
-    
     cp "$sf" "${D}/sub"
 }
 
@@ -168,10 +171,8 @@ EOF
 node "$js" "$w" "$W" "${D}/sub" "$ID" &
 P1=$!
 
-# 生成配置文件
+# Config
 IN=""
-
-# T Config
 if [ -n "$t" ]; then
     IN="{
         \"type\": \"${vb_t}\",
@@ -184,7 +185,6 @@ if [ -n "$t" ]; then
     }"
 fi
 
-# H Config
 if [ -n "$h" ]; then
     [ -n "$IN" ] && IN="${IN},"
     IN="${IN}{
@@ -197,7 +197,6 @@ if [ -n "$h" ]; then
     }"
 fi
 
-# V Config
 if [ -n "$v" ]; then
     [ -n "$IN" ] && IN="${IN},"
     IN="${IN}{
@@ -216,7 +215,6 @@ if [ -n "$v" ]; then
     }"
 fi
 
-# A Config
 [ -n "$IN" ] && IN="${IN},"
 IN="${IN}{
     \"type\": \"${vb_v}\",
@@ -232,7 +230,7 @@ cat > "$cf_j" <<EOF
 {"log":{"level":"warn"},"inbounds":[${IN}],"outbounds":[{"type":"direct","tag":"d"}]}
 EOF
 
-# 启动程序
+# 启动 S
 "$bs" run -c "$cf_j" &
 P2=$!
 sleep 2
@@ -245,7 +243,6 @@ P3=$!
 
 for i in {1..20}; do
     sleep 1
-    # trycloudflare.com
     kw=$(E "dHJ5Y2xvdWRmbGFyZS5jb20=")
     ad=$(grep -oE "https://[a-zA-Z0-9-]+\.${kw}" "$l_a" 2>/dev/null | head -1 | sed 's|https://||')
     [ -n "$ad" ] && break
@@ -253,7 +250,7 @@ done
 
 g_s "$ad"
 
-# 结果
+# 输出
 S_URL="http://${IP}:${w}/sub"
 echo "OK"
 echo "L: $S_URL"
