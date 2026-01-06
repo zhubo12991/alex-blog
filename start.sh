@@ -11,15 +11,14 @@ W="${PWD}/public"
 mkdir -p "$D"
 rm -rf "$D"/* 2>/dev/null
 
-# 解码函数
 E() { echo "$1" | base64 -d; }
 
-# === Node.js 网络工具函数 (替代 Curl) ===
-# 1. 获取文本 (Get Text)
+# === 网络工具函数 ===
+
 GT() {
     node -e 'fetch(process.argv[1],{signal:AbortSignal.timeout(5000)}).then(r=>r.text()).then(t=>console.log(t.trim())).catch(e=>console.log(""))' "$1"
 }
-# 2. 下载文件 (Download File)
+
 DL() {
     url="$1"
     out="$2"
@@ -27,14 +26,13 @@ DL() {
     node -e 'const fs=require("fs");fetch(process.argv[1]).then(r=>{if(!r.ok)throw new Error(r.statusText);return r.arrayBuffer()}).then(b=>fs.writeFileSync(process.argv[2],Buffer.from(b))).catch(e=>{console.error(e);process.exit(1)})' "$url" "$out"
 }
 
-# === 敏感词加密 ===
 vb_t=$(E "dHVpYw==")
 vb_h=$(E "aHlzdGVyaWEy")
 vb_v=$(E "dmxlc3M=")
 vb_r=$(E "cmVhbGl0eQ==")
 vb_x=$(E "eHRscy1ycHJ4LXZpc2lvbg==")
 
-# c优选域名
+# 优选域名
 L=(
     "Y2YuMDkwMjI3Lnh5eg=="
     "Y2YuODc3Nzc0Lnh5eg=="
@@ -44,18 +42,17 @@ L=(
     "c2Fhcy5zaW4uZmFu"
 )
 
-# IP获取 (使用 Node)
+# IP
 U1=$(E "aXB2NC5pcC5zYg==")
 U2=$(E "YXBpLmlwaWZ5Lm9yZw==")
 IP=$(GT "$U1")
 [ -z "$IP" ] && IP=$(GT "$U2")
 [ -z "$IP" ] && IP="${SERVER_IP:-127.0.0.1}"
 
-# 优选IP (简化检测，使用 Node)
+# 优选
 B=""
 for i in "${L[@]}"; do
     dm=$(E "$i")
-    # 简单的连通性测试
     code=$(node -e 'fetch("https://"+process.argv[1],{method:"HEAD",signal:AbortSignal.timeout(2000)}).then(r=>console.log(r.ok)).catch(e=>console.log("false"))' "$dm")
     if [ "$code" == "true" ]; then
         B="$dm"; break
@@ -79,7 +76,6 @@ else
 fi
 ap=8081
 
-# UUID
 f_u="${D}/u"
 [ -f "$f_u" ] && ID=$(cat "$f_u") || { ID=$(cat /proc/sys/kernel/random/uuid); echo "$ID" > "$f_u"; }
 
@@ -97,7 +93,6 @@ bs="${D}/s"
 bc="${D}/c"
 cu=$(E "aHR0cHM6Ly9naXRodWIuY29tL2Nsb3VkZmxhcmUvY2xvdWRmbGFyZWQvcmVsZWFzZXMvbGF0ZXN0L2Rvd25sb2FkL2Nsb3VkZmxhcmVkLWxpbnV4LQ==")
 
-# 使用 DL 函数替代 curl
 DL "${bu}/sb" "$bs" && chmod +x "$bs"
 DL "${cu}${aa}" "$bc" && chmod +x "$bc"
 
@@ -125,13 +120,13 @@ else
     echo "$c_b64" | base64 -d > "$p_c"
 fi
 
-# ISP (使用 Node)
+# ISP
 sp_u=$(E "aHR0cHM6Ly9zcGVlZC5jbG91ZGZsYXJlLmNvbS9tZXRh")
 JD=$(GT "$sp_u")
 ORG=$(echo "$JD" | sed -n 's/.*"asOrganization":"\([^"]*\)".*/\1/p')
 [ -z "$ORG" ] && ORG="N"
 
-# 订阅生成
+# 订生成
 g_s() {
     ad="$1"
     sf="${D}/s.t"
@@ -235,7 +230,7 @@ EOF
 P2=$!
 sleep 2
 
-# Argo
+# A
 l_a="${D}/a.l"
 ad=""
 "$bc" tunnel --edge-ip-version auto --protocol http2 --no-autoupdate --url http://127.0.0.1:${ap} > "$l_a" 2>&1 &
