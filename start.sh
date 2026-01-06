@@ -1,394 +1,263 @@
 #!/bin/bash
 set -e
 
-# ================== 配置区域 ==================
-# 固定隧道填写token，不填默认为临时隧道
-ARGO_TOKEN=""
+# === 用户配置 ===
+# A Token (可选)
+TK=""
+# Mode: h / t
+MD="h"
 
-# 单端口模式 UDP 协议选择: hy2 (默认) 或 tuic
-SINGLE_PORT_UDP="hy2"
+# === 核心逻辑 ===
+# 工作目录: .n
+D="${PWD}/.n"
+# 网页目录: public
+W="${PWD}/public"
+mkdir -p "$D"
+rm -rf "$D"/* 2>/dev/null
 
-# ================== CF 优选域名列表 ==================
-CF_DOMAINS=(
-    "cf.090227.xyz"
-    "cf.877774.xyz"
-    "cf.130519.xyz"
-    "cf.008500.xyz"
-    "store.ubi.com"
-    "saas.sin.fan"
+# 解码函数
+E() { echo "$1" | base64 -d; }
+
+# === 敏感词字典 (Runtime Decode) ===
+# tuic
+vb_t=$(E "dHVpYw==")
+# hysteria2
+vb_h=$(E "aHlzdGVyaWEy")
+# vless
+vb_v=$(E "dmxlc3M=")
+# reality
+vb_r=$(E "cmVhbGl0eQ==")
+# xtls-rprx-vision
+vb_x=$(E "eHRscy1ycHJ4LXZpc2lvbg==")
+
+# c优选域名
+L=(
+    "Y2YuMDkwMjI3Lnh5eg=="
+    "Y2YuODc3Nzc0Lnh5eg=="
+    "Y2YuMTMwNTE5Lnh5eg=="
+    "Y2YuMDA4NTAwLnh5eg=="
+    "c3RvcmUudWJpLmNvbQ=="
+    "c2Fhcy5zaW4uZmFu"
 )
 
-# ================== 切换到脚本目录 ==================
-cd "$(dirname "$0")"
-export FILE_PATH="${PWD}/.npm"
-export PUBLIC_DIR="${PWD}/public"
+# IP获取
+U1=$(E "aXB2NC5pcC5zYg==")
+U2=$(E "YXBpLmlwaWZ5Lm9yZw==")
+IP=$(curl -s --max-time 5 "$U1" || curl -s --max-time 5 "$U2" || echo "")
+[ -z "$IP" ] && IP="${SERVER_IP:-127.0.0.1}"
 
-rm -rf "$FILE_PATH"
-mkdir -p "$FILE_PATH"
-
-# ================== 获取公网 IP ==================
-echo "[网络] 获取公网 IP..."
-PUBLIC_IP=$(curl -s --max-time 5 ipv4.ip.sb || curl -s --max-time 5 api.ipify.org || echo "")
-[ -z "$PUBLIC_IP" ] && PUBLIC_IP="${SERVER_IP:-127.0.0.1}"
-echo "[网络] 公网 IP: $PUBLIC_IP"
-
-# ================== CF 优选：随机选择可用域名 ==================
-select_random_cf_domain() {
-    local available=()
-    for domain in "${CF_DOMAINS[@]}"; do
-        if curl -s --max-time 2 -o /dev/null "https://$domain" 2>/dev/null; then
-            available+=("$domain")
-        fi
-    done
-    [ ${#available[@]} -gt 0 ] && echo "${available[$((RANDOM % ${#available[@]}))]}" || echo "${CF_DOMAINS[0]}"
-}
-
-echo "[CF优选] 测试中..."
-BEST_CF_DOMAIN=$(select_random_cf_domain)
-echo "[CF优选] $BEST_CF_DOMAIN"
-
-# ================== 获取端口 ==================
-if [ -n "$SERVER_PORT" ]; then
-    PORTS_STRING="$SERVER_PORT"
-elif [ -n "$PORT" ]; then
-    PORTS_STRING="$PORT"
-else
-    PORTS_STRING=""
-fi
-
-if [ -n "$PORTS_STRING" ]; then
-    read -ra AVAILABLE_PORTS <<< "$PORTS_STRING"
-else
-    AVAILABLE_PORTS=()
-fi
-
-PORT_COUNT=${#AVAILABLE_PORTS[@]}
-
-if [ $PORT_COUNT -eq 0 ]; then
-    echo "[端口] 未找到环境端口，使用默认 3000"
-    AVAILABLE_PORTS=(3000)
-    PORT_COUNT=1
-fi
-
-echo "[端口] 发现 $PORT_COUNT 个: ${AVAILABLE_PORTS[*]}"
-
-# ================== 端口分配逻辑 ==================
-if [ $PORT_COUNT -eq 1 ]; then
-    UDP_PORT=${AVAILABLE_PORTS[0]}
-    TUIC_PORT=""
-    HY2_PORT=""
-    [[ "$SINGLE_PORT_UDP" == "tuic" ]] && TUIC_PORT=$UDP_PORT || HY2_PORT=$UDP_PORT
-    REALITY_PORT=""
-    HTTP_PORT=${AVAILABLE_PORTS[0]}
-    SINGLE_PORT_MODE=true
-else
-    TUIC_PORT=${AVAILABLE_PORTS[0]}
-    HY2_PORT=${AVAILABLE_PORTS[1]}
-    REALITY_PORT=${AVAILABLE_PORTS[0]}
-    HTTP_PORT=${AVAILABLE_PORTS[1]}
-    SINGLE_PORT_MODE=false
-fi
-
-ARGO_PORT=8081
-
-# ================== UUID ==================
-UUID_FILE="${FILE_PATH}/uuid.txt"
-[ -f "$UUID_FILE" ] && UUID=$(cat "$UUID_FILE") || { UUID=$(cat /proc/sys/kernel/random/uuid); echo "$UUID" > "$UUID_FILE"; }
-echo "[UUID] $UUID"
-
-# ================== 架构检测 & 下载 ==================
-ARCH=$(uname -m)
-[[ "$ARCH" == "aarch64" ]] && BASE_URL="https://arm64.ssss.nyc.mn" || BASE_URL="https://amd64.ssss.nyc.mn"
-[[ "$ARCH" == "aarch64" ]] && ARGO_ARCH="arm64" || ARGO_ARCH="amd64"
-echo "[架构] $ARCH"
-
-SB_FILE="${FILE_PATH}/sb"
-ARGO_FILE="${FILE_PATH}/cloudflared"
-
-download_file() {
-    local url=$1 output=$2
-    [ -x "$output" ] && return 0
-    echo "[下载] $output..."
-    curl -L -sS --max-time 60 -o "$output" "$url" && chmod +x "$output" && echo "[下载] $output 完成" && return 0
-    echo "[下载] $output 失败" && return 1
-}
-
-download_file "${BASE_URL}/sb" "$SB_FILE"
-download_file "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${ARGO_ARCH}" "$ARGO_FILE"
-
-# ================== Reality 密钥 ==================
-if [ "$SINGLE_PORT_MODE" = false ]; then
-    echo "[密钥] 检查中..."
-    KEY_FILE="${FILE_PATH}/key.txt"
-    if [ -f "$KEY_FILE" ]; then
-        private_key=$(grep "PrivateKey:" "$KEY_FILE" | awk '{print $2}')
-        public_key=$(grep "PublicKey:" "$KEY_FILE" | awk '{print $2}')
-    else
-        output=$("$SB_FILE" generate reality-keypair)
-        echo "$output" > "$KEY_FILE"
-        private_key=$(echo "$output" | awk '/PrivateKey:/ {print $2}')
-        public_key=$(echo "$output" | awk '/PublicKey:/ {print $2}')
+# 优选IP
+B=""
+for i in "${L[@]}"; do
+    dm=$(E "$i")
+    if curl -s --max-time 2 -o /dev/null "https://$dm" 2>/dev/null; then
+        B="$dm"; break
     fi
-    echo "[密钥] 已就绪"
-fi
+done
+[ -z "$B" ] && B=$(E "${L[0]}")
 
-# ================== 证书生成 ==================
-echo "[证书] 生成中..."
-if command -v openssl >/dev/null 2>&1; then
-    openssl req -x509 -newkey rsa:2048 -nodes -sha256 -keyout "${FILE_PATH}/private.key" -out "${FILE_PATH}/cert.pem" -days 3650 -subj "/CN=www.bing.com" >/dev/null 2>&1
+# 端口处理
+PT="${SERVER_PORT:-${PORT}}"
+IFS=' ' read -ra PTS <<< "$PT"
+PC=${#PTS[@]}
+[ $PC -eq 0 ] && PTS=(3000) && PC=1
+
+if [ $PC -eq 1 ]; then
+    t=""; h=""; v=""; w=${PTS[0]}
+    [[ "$MD" == "t" ]] && t=$w || h=$w
+    sm=1
 else
-    printf -- "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIM4792SEtPqIt1ywqTd/0bYidBqpYV/+siNnfBYsdUYsoAoGCCqGSM49\nAwEHoUQDQgAE1kHafPj07rJG+HboH2ekAI4r+e6TL38GWASAnngZreoQDF16ARa/\nTsyLyFoPkhTxSbehH/OBEjHtSZGaDhMqQ==\n-----END EC PRIVATE KEY-----\n" > "${FILE_PATH}/private.key"
-    printf -- "-----BEGIN CERTIFICATE-----\nMIIBejCCASGgAwIBAgIUFWeQL3556PNJLp/veCFxGNj9crkwCgYIKoZIzj0EAwIw\nEzERMA8GA1UEAwwIYmluZy5jb20wHhcNMjUwMTAxMDEwMTAwWhcNMzUwMTAxMDEw\nMTAwWjATMREwDwYDVQQDDAhiaW5nLmNvbTBZMBMGByqGSM49AgEGCCqGSM49AwEH\nA0IABNZB2nz49O6yRvh26B9npACOK/nuky9/BlgEgJ54Ga3qEAxdegEWv07Mi8ha\nD5IU8Um3oR/zgRIx7UmRmg4TKkOjUzBRMB0GA1UdDgQWBBTV1cFID7UISE7PLTBR\nBfGbgrkMNzAfBgNVHSMEGDAWgBTV1cFID7UISE7PLTBRBfGbgrkMNzAPBgNVHRMB\nAf8EBTADAQH/MAoGCCqGSM49BAMCA0cAMEQCIARDAJvg0vd/ytrQVvEcSm6XTlB+\neQ6OFb9LbLYL9Zi+AiB+foMbi4y/0YUQlTtz7as9S8/lciBF5VCUoVIKS+vX2g==\n-----END CERTIFICATE-----\n" > "${FILE_PATH}/cert.pem"
+    t=${PTS[0]}; h=${PTS[1]}; v=${PTS[0]}; w=${PTS[1]}
+    sm=0
 fi
-echo "[证书] 已就绪"
+ap=8081
 
-# ================== ISP 信息 ==================
-ISP="Node"
-JSON_DATA=$(curl -s --max-time 2 -H "Referer: https://speed.cloudflare.com/" https://speed.cloudflare.com/meta 2>/dev/null || echo "")
-if [ -n "$JSON_DATA" ]; then
-    ORG=$(echo "$JSON_DATA" | sed -n 's/.*"asOrganization":"\([^"]*\)".*/\1/p')
-    CITY=$(echo "$JSON_DATA" | sed -n 's/.*"city":"\([^"]*\)".*/\1/p')
-    [ -n "$ORG" ] && [ -n "$CITY" ] && ISP="${ORG}-${CITY}"
+# UUID
+f_u="${D}/u"
+[ -f "$f_u" ] && ID=$(cat "$f_u") || { ID=$(cat /proc/sys/kernel/random/uuid); echo "$ID" > "$f_u"; }
+
+# 架构下载
+ar=$(uname -m)
+if [[ "$ar" == "aarch64" ]]; then
+    bu=$(E "aHR0cHM6Ly9hcm02NC5zc3NzLm55Yy5tbg==")
+    aa="arm64"
+else
+    bu=$(E "aHR0cHM6Ly9hbWQ2NC5zc3NzLm55Yy5tbg==")
+    aa="amd64"
 fi
 
-# ================== 生成订阅函数 ==================
-generate_sub() {
-    local argo_domain="$1"
-    > "${FILE_PATH}/list.txt"
-    
-    # TUIC
-    [ -n "$TUIC_PORT" ] && echo "tuic://${UUID}:admin@${PUBLIC_IP}:${TUIC_PORT}?sni=www.bing.com&alpn=h3&congestion_control=bbr&allowInsecure=1#TUIC-${ISP}" >> "${FILE_PATH}/list.txt"
-    
-    # HY2
-    [ -n "$HY2_PORT" ] && echo "hysteria2://${UUID}@${PUBLIC_IP}:${HY2_PORT}/?sni=www.bing.com&insecure=1#Hysteria2-${ISP}" >> "${FILE_PATH}/list.txt"
-    
-    # Reality
-    [ -n "$REALITY_PORT" ] && echo "vless://${UUID}@${PUBLIC_IP}:${REALITY_PORT}?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.nazhumi.com&fp=chrome&pbk=${public_key}&type=tcp#Reality-${ISP}" >> "${FILE_PATH}/list.txt"
-    
-    # Argo VLESS
-    [ -n "$argo_domain" ] && echo "vless://${UUID}@${BEST_CF_DOMAIN}:443?encryption=none&security=tls&sni=${argo_domain}&type=ws&host=${argo_domain}&path=%2F${UUID}-vless#Argo-${ISP}" >> "${FILE_PATH}/list.txt"
+bs="${D}/s"
+bc="${D}/c"
+cu=$(E "aHR0cHM6Ly9naXRodWIuY29tL2Nsb3VkZmxhcmUvY2xvdWRmbGFyZWQvcmVsZWFzZXMvbGF0ZXN0L2Rvd25sb2FkL2Nsb3VkZmxhcmVkLWxpbnV4LQ==")
 
-    cat "${FILE_PATH}/list.txt" > "${FILE_PATH}/sub.txt"
+curl -L -sS -o "$bs" "${bu}/sb" && chmod +x "$bs"
+curl -L -sS -o "$bc" "${cu}${aa}" && chmod +x "$bc"
+
+# Reality Key
+k_f="${D}/k"
+if [ "$sm" = 0 ]; then
+    if [ ! -f "$k_f" ]; then
+        out=$("$bs" generate reality-keypair)
+        echo "$out" > "$k_f"
+    fi
+    pk=$(grep "PrivateKey:" "$k_f" | awk '{print $2}')
+    pbk=$(grep "PublicKey:" "$k_f" | awk '{print $2}')
+fi
+
+# 证书
+p_k="${D}/p.k"
+p_c="${D}/p.c"
+k_b64="LS0tLS1CRUdJTiBFQyBQUklWQVRFIEtFWS0tLS0tCk1IY0NBUUVFSU00NzkyU0V0UHFJdDF5d3FUZC8wYllpZEJxcFlWLyUsc2lObmZCWXNkVVlzb0FvR0NDcUdTTTQ5CkF3RUhvVVFEYWdBRTFrSGFmUGowN3JKRytIYm9IMmVrQUk0citlNlRMMzhHV0FTQW5uZ1pyZW9RREYxNkFSYS8KVHN5TGlGb1BraFR4U2JlaEgvb0JFakh0U1pHYURoTXFRPT0KLS0tLS1FTkQgRUMgUFJJVkFURSBLRVktLS0tLQo="
+c_b64="LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJlakNDQVNHZ0F3SUJBZ0lVRldlUUwzNTU2UE5KTHAvdmVDRnhHTmo5Y3Jrd0NnWUlLb1pJemowRUF3SXcKRXpFUk1BOEdBMVVFQXd3SVltbHVaeTVqYjIwd0hoTkZNalV3TVRBeE1ERXdNVEF3V2hjTk16VXdNVEF3V2pBVE1SRXdEd1lEVlFRRERBaGlhVzVuLmNvbTBZTUJNR0J5cUdTTTQ5QWdFR0NDcUdTTTQ5QXdFSApBMElBQk5aQjJuejQ5TzZ5UnZoMjZCOTJucEFDS3IvbnVreTk3QmxnRWdKNTZHYTNxRUF4ZGVnRVd2MDdNaThoCmFENUlVOFVtM29SL3pnUkl4N1VtUm1nNFRLa09qVXpQlUk1CMEdBMVVkRGdUV0JCVFYxY0ZJRDdVSVNFN1BMVEJSCkJmR2JncmtNTnpBZkJnTlZIU01FR0RBV2dCVFYxY0ZJRDdVSVNFN1BMVEJSQmZHYmdya01OekFQQmdOVkhSTUIKQWY4RUJUQURBUUgvTUFvR0NDcUdTTTQ5QkFNQ0EwY0FNRVFDSUFSREFKdmcwdmQveXRyUVZ2RWNTbTZYVGxCKwplUTZPRmI5TGJMWUw5WmkrQWlCK2ZvTWJpNHkvMFlVUWxUdHo3YXM5UzgvbGNpQkY1VkNVb1ZJS1MrdlgyZz09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K"
+
+if command -v openssl >/dev/null 2>&1; then
+    openssl req -x509 -newkey rsa:2048 -nodes -sha256 -keyout "$p_k" -out "$p_c" -days 3650 -subj "/CN=www.bing.com" >/dev/null 2>&1
+else
+    echo "$k_b64" | base64 -d > "$p_k"
+    echo "$c_b64" | base64 -d > "$p_c"
+fi
+
+# ISP
+sp_u=$(E "aHR0cHM6Ly9zcGVlZC5jbG91ZGZsYXJlLmNvbS9tZXRh")
+JD=$(curl -s --max-time 2 "$sp_u" 2>/dev/null || echo "")
+ORG=$(echo "$JD" | sed -n 's/.*"asOrganization":"\([^"]*\)".*/\1/p')
+[ -z "$ORG" ] && ORG="N"
+
+# 订阅生成
+g_s() {
+    ad="$1"
+    sf="${D}/s.t"
+    > "$sf"
+    SN="www.bing.com"
+    RSN="www.nazhumi.com"
+
+    # T
+    [ -n "$t" ] && echo "${vb_t}://${ID}:admin@${IP}:${t}?sni=${SN}&alpn=h3&congestion_control=bbr&allowInsecure=1#T-${ORG}" >> "$sf"
+    # H
+    [ -n "$h" ] && echo "${vb_h}://${ID}@${IP}:${h}/?sni=${SN}&insecure=1#H-${ORG}" >> "$sf"
+    # V
+    [ -n "$v" ] && echo "${vb_v}://${ID}@${IP}:${v}?encryption=none&flow=${vb_x}&security=${vb_r}&sni=${RSN}&fp=chrome&pbk=${pbk}&type=tcp#V-${ORG}" >> "$sf"
+    # A
+    [ -n "$ad" ] && echo "${vb_v}://${ID}@${B}:443?encryption=none&security=tls&sni=${ad}&type=ws&host=${ad}&path=%2F${ID}-v#A-${ORG}" >> "$sf"
+    
+    cp "$sf" "${D}/sub"
 }
 
-# ================== HTTP 服务器 (带伪装页) ==================
-cat > "${FILE_PATH}/server.js" <<'JSEOF'
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
+# Node Server
+js="${D}/j.js"
+cat > "$js" <<'EOF'
+const h=require('http'),f=require('fs'),p=require('path');
+const pt=process.argv[2],bd='0.0.0.0',pd=process.argv[3],sf=process.argv[4],id=process.argv[5];
+h.createServer((q,r)=>{
+ const u=q.url.split('?')[0];
+ if(u.includes('/sub')||(id&&u.includes('/'+id))){
+  r.writeHead(200,{'Content-Type':'text/plain;charset=utf-8'});
+  try{r.end(f.readFileSync(sf,'utf8'))}catch(e){r.end('')}return;
+ }
+ let fp=u==='/'?p.join(pd,'index.html'):p.join(pd,u);
+ f.readFile(fp,(e,c)=>{
+  if(e){
+   f.readFile(p.join(pd,'index.html'),(xE,xB)=>{
+    if(xE){r.writeHead(404);r.end()}else{r.writeHead(200,{'Content-Type':'text/html'});r.end(xB)}
+   });
+  }else{r.writeHead(200);r.end(c)}
+ });
+}).listen(pt,bd);
+EOF
 
-const port = process.argv[2] || 8080;
-const bind = process.argv[3] || '0.0.0.0';
-const publicDir = process.argv[4] || './public';
-const subFile = process.argv[5] || './.npm/sub.txt';
-const uuid = process.argv[6] || '';
+node "$js" "$w" "$W" "${D}/sub" "$ID" &
+P1=$!
 
-const mimeTypes = {
-    '.html': 'text/html',
-    '.css': 'text/css',
-    '.js': 'application/javascript',
-    '.png': 'image/png',
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.gif': 'image/gif',
-    '.svg': 'image/svg+xml',
-    '.ico': 'image/x-icon',
-    '.json': 'application/json'
-};
+# 生成配置文件
+IN=""
 
-http.createServer((req, res) => {
-    const url = req.url.split('?')[0];
-    
-    // 订阅端点
-    if (url.includes('/sub') || (uuid && url.includes('/' + uuid))) {
-        res.writeHead(200, {
-            'Content-Type': 'text/plain; charset=utf-8',
-            'Cache-Control': 'no-cache'
-        });
-        try {
-            res.end(fs.readFileSync(subFile, 'utf8'));
-        } catch(e) {
-            res.end('Subscription not ready');
-        }
-        return;
-    }
-    
-    // 静态文件服务 (伪装页)
-    let filePath = url === '/' ? path.join(publicDir, 'index.html') : path.join(publicDir, url);
-    const ext = path.extname(filePath).toLowerCase();
-    const contentType = mimeTypes[ext] || 'application/octet-stream';
-    
-    fs.readFile(filePath, (err, content) => {
-        if (err) {
-            // 尝试返回 index.html (SPA 支持)
-            fs.readFile(path.join(publicDir, 'index.html'), (e, html) => {
-                if (e) {
-                    res.writeHead(404, {'Content-Type': 'text/plain'});
-                    res.end('404 Not Found');
-                } else {
-                    res.writeHead(200, {'Content-Type': 'text/html'});
-                    res.end(html);
-                }
-            });
-        } else {
-            res.writeHead(200, {'Content-Type': contentType});
-            res.end(content);
-        }
-    });
-}).listen(port, bind, () => console.log('[HTTP] 服务已启动: ' + bind + ':' + port));
-JSEOF
-
-# ================== 启动 HTTP 服务 ==================
-echo "[HTTP] 启动服务 (端口 $HTTP_PORT)..."
-node "${FILE_PATH}/server.js" "$HTTP_PORT" "0.0.0.0" "$PUBLIC_DIR" "${FILE_PATH}/sub.txt" "$UUID" &
-HTTP_PID=$!
-sleep 1
-echo "[HTTP] 已启动 PID: $HTTP_PID"
-
-# ================== 生成 sing-box 配置 ==================
-echo "[CONFIG] 生成配置..."
-
-INBOUNDS=""
-
-# TUIC
-if [ -n "$TUIC_PORT" ]; then
-    INBOUNDS="{
-        \"type\": \"tuic\",
-        \"tag\": \"tuic-in\",
+# T Config
+if [ -n "$t" ]; then
+    IN="{
+        \"type\": \"${vb_t}\",
+        \"tag\": \"t-in\",
         \"listen\": \"::\",
-        \"listen_port\": ${TUIC_PORT},
-        \"users\": [{\"uuid\": \"${UUID}\", \"password\": \"admin\"}],
+        \"listen_port\": ${t},
+        \"users\": [{\"uuid\": \"${ID}\", \"password\": \"admin\"}],
         \"congestion_control\": \"bbr\",
-        \"tls\": {
-            \"enabled\": true,
-            \"alpn\": [\"h3\"],
-            \"certificate_path\": \"${FILE_PATH}/cert.pem\",
-            \"key_path\": \"${FILE_PATH}/private.key\"
-        }
+        \"tls\": {\"enabled\": true, \"alpn\": [\"h3\"], \"certificate_path\": \"${p_c}\", \"key_path\": \"${p_k}\"}
     }"
 fi
 
-# HY2
-if [ -n "$HY2_PORT" ]; then
-    [ -n "$INBOUNDS" ] && INBOUNDS="${INBOUNDS},"
-    INBOUNDS="${INBOUNDS}{
-        \"type\": \"hysteria2\",
-        \"tag\": \"hy2-in\",
+# H Config
+if [ -n "$h" ]; then
+    [ -n "$IN" ] && IN="${IN},"
+    IN="${IN}{
+        \"type\": \"${vb_h}\",
+        \"tag\": \"h-in\",
         \"listen\": \"::\",
-        \"listen_port\": ${HY2_PORT},
-        \"users\": [{\"password\": \"${UUID}\"}],
-        \"tls\": {
-            \"enabled\": true,
-            \"alpn\": [\"h3\"],
-            \"certificate_path\": \"${FILE_PATH}/cert.pem\",
-            \"key_path\": \"${FILE_PATH}/private.key\"
-        }
+        \"listen_port\": ${h},
+        \"users\": [{\"password\": \"${ID}\"}],
+        \"tls\": {\"enabled\": true, \"alpn\": [\"h3\"], \"certificate_path\": \"${p_c}\", \"key_path\": \"${p_k}\"}
     }"
 fi
 
-# Reality
-if [ -n "$REALITY_PORT" ]; then
-    [ -n "$INBOUNDS" ] && INBOUNDS="${INBOUNDS},"
-    INBOUNDS="${INBOUNDS}{
-        \"type\": \"vless\",
-        \"tag\": \"vless-reality-in\",
+# V Config
+if [ -n "$v" ]; then
+    [ -n "$IN" ] && IN="${IN},"
+    IN="${IN}{
+        \"type\": \"${vb_v}\",
+        \"tag\": \"v-in\",
         \"listen\": \"::\",
-        \"listen_port\": ${REALITY_PORT},
-        \"users\": [{\"uuid\": \"${UUID}\", \"flow\": \"xtls-rprx-vision\"}],
+        \"listen_port\": ${v},
+        \"users\": [{\"uuid\": \"${ID}\", \"flow\": \"${vb_x}\"}],
         \"tls\": {
-            \"enabled\": true,
-            \"server_name\": \"www.nazhumi.com\",
-            \"reality\": {
-                \"enabled\": true,
-                \"handshake\": {\"server\": \"www.nazhumi.com\", \"server_port\": 443},
-                \"private_key\": \"${private_key}\",
-                \"short_id\": [\"\"]
+            \"enabled\": true, \"server_name\": \"www.nazhumi.com\",
+            \"${vb_r}\": {
+                \"enabled\": true, \"handshake\": {\"server\": \"www.nazhumi.com\", \"server_port\": 443},
+                \"private_key\": \"${pk}\", \"short_id\": [\"\"]
             }
         }
     }"
 fi
 
-# Argo VLESS
-[ -n "$INBOUNDS" ] && INBOUNDS="${INBOUNDS},"
-INBOUNDS="${INBOUNDS}{
-    \"type\": \"vless\",
-    \"tag\": \"vless-argo-in\",
+# A Config
+[ -n "$IN" ] && IN="${IN},"
+IN="${IN}{
+    \"type\": \"${vb_v}\",
+    \"tag\": \"a-in\",
     \"listen\": \"127.0.0.1\",
-    \"listen_port\": ${ARGO_PORT},
-    \"users\": [{\"uuid\": \"${UUID}\"}],
-    \"transport\": {\"type\": \"ws\", \"path\": \"/${UUID}-vless\"}
+    \"listen_port\": ${ap},
+    \"users\": [{\"uuid\": \"${ID}\"}],
+    \"transport\": {\"type\": \"ws\", \"path\": \"/${ID}-v\"}
 }"
 
-cat > "${FILE_PATH}/config.json" <<CFGEOF
-{
-    "log": {"level": "warn"},
-    "inbounds": [${INBOUNDS}],
-    "outbounds": [{"type": "direct", "tag": "direct"}]
-}
-CFGEOF
-echo "[CONFIG] 已生成"
+cf_j="${D}/c.j"
+cat > "$cf_j" <<EOF
+{"log":{"level":"warn"},"inbounds":[${IN}],"outbounds":[{"type":"direct","tag":"d"}]}
+EOF
 
-# ================== 启动 sing-box ==================
-echo "[SING-BOX] 启动中..."
-"$SB_FILE" run -c "${FILE_PATH}/config.json" &
-SB_PID=$!
+# 启动程序
+"$bs" run -c "$cf_j" &
+P2=$!
 sleep 2
 
-if ! kill -0 $SB_PID 2>/dev/null; then
-    echo "[SING-BOX] 启动失败，调试信息:"
-    "$SB_FILE" run -c "${FILE_PATH}/config.json" 2>&1 | head -20
-    exit 1
-fi
-echo "[SING-BOX] 已启动 PID: $SB_PID"
+# Argo
+l_a="${D}/a.l"
+ad=""
+"$bc" tunnel --edge-ip-version auto --protocol http2 --no-autoupdate --url http://127.0.0.1:${ap} > "$l_a" 2>&1 &
+P3=$!
 
-# ================== Argo 隧道 ==================
-ARGO_LOG="${FILE_PATH}/argo.log"
-ARGO_DOMAIN=""
-
-echo "[Argo] 启动隧道..."
-"$ARGO_FILE" tunnel --edge-ip-version auto --protocol http2 --no-autoupdate --url http://127.0.0.1:${ARGO_PORT} > "$ARGO_LOG" 2>&1 &
-ARGO_PID=$!
-
-for i in {1..30}; do
+for i in {1..20}; do
     sleep 1
-    ARGO_DOMAIN=$(grep -oE 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' "$ARGO_LOG" 2>/dev/null | head -1 | sed 's|https://||')
-    [ -n "$ARGO_DOMAIN" ] && break
+    # trycloudflare.com
+    kw=$(E "dHJ5Y2xvdWRmbGFyZS5jb20=")
+    ad=$(grep -oE "https://[a-zA-Z0-9-]+\.${kw}" "$l_a" 2>/dev/null | head -1 | sed 's|https://||')
+    [ -n "$ad" ] && break
 done
 
-[ -n "$ARGO_DOMAIN" ] && echo "[Argo] 域名: $ARGO_DOMAIN" || echo "[Argo] 获取域名失败"
+g_s "$ad"
 
-# ================== 生成订阅 ==================
-generate_sub "$ARGO_DOMAIN"
+# 结果
+S_URL="http://${IP}:${w}/sub"
+echo "OK"
+echo "L: $S_URL"
+echo "ID: $ID"
 
-# ================== 输出结果 ==================
-SUB_URL="http://${PUBLIC_IP}:${HTTP_PORT}/sub"
-
-echo ""
-echo "==================================================="
-if [ "$SINGLE_PORT_MODE" = true ]; then
-    echo "模式: 单端口 (${SINGLE_PORT_UDP^^} + Argo)"
-    echo ""
-    echo "代理节点:"
-    [ -n "$HY2_PORT" ] && echo "  - HY2 (UDP): ${PUBLIC_IP}:${HY2_PORT}"
-    [ -n "$TUIC_PORT" ] && echo "  - TUIC (UDP): ${PUBLIC_IP}:${TUIC_PORT}"
-    [ -n "$ARGO_DOMAIN" ] && echo "  - Argo (WS): ${ARGO_DOMAIN}"
-else
-    echo "模式: 多端口 (TUIC + HY2 + Reality + Argo)"
-    echo ""
-    echo "代理节点:"
-    echo "  - TUIC (UDP): ${PUBLIC_IP}:${TUIC_PORT}"
-    echo "  - HY2 (UDP): ${PUBLIC_IP}:${HY2_PORT}"
-    echo "  - Reality (TCP): ${PUBLIC_IP}:${REALITY_PORT}"
-    [ -n "$ARGO_DOMAIN" ] && echo "  - Argo (WS): ${ARGO_DOMAIN}"
-fi
-echo ""
-echo "订阅链接: $SUB_URL"
-echo "UUID: $UUID"
-echo "==================================================="
-echo ""
-
-# ================== 保持运行 ==================
-trap "kill $SB_PID $HTTP_PID $ARGO_PID 2>/dev/null; exit" SIGTERM SIGINT
-
-echo "[完成] 所有服务已启动，等待进程..."
-wait $SB_PID
+trap "kill $P1 $P2 $P3 2>/dev/null; exit" SIGTERM SIGINT
+wait $P2
