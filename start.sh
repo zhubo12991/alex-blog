@@ -12,14 +12,11 @@ v_vm=$(E "dm1lc3M=")
 v_tr=$(E "dHJvamFu")
 v_ws=$(E "d3M=")
 
-U1=$(E "aHR0cDovL2NoZWNraXAuYW1hem9uYXdzLmNvbQ==")
-U2=$(E "aHR0cHM6Ly9hcGkuaXBpZnkub3Jn")
-IP=$(node -e 'fetch(process.argv[1]).then(r=>r.text()).then(t=>console.log(t.trim())).catch(()=>{})' "$U1")
-[ -z "$IP" ] && IP=$(node -e 'fetch(process.argv[1]).then(r=>r.text()).then(t=>console.log(t.trim())).catch(()=>{})' "$U2")
-[ -z "$IP" ] && IP="127.0.0.1"
+p1=10001
+p2=10002
+p3=10003
 
 ID=$(cat /proc/sys/kernel/random/uuid)
-ap=8081
 
 bs="${D}/s"
 bc="${D}/c"
@@ -32,9 +29,9 @@ chmod +x "$bs" "$bc"
 cf_j="${D}/c.j"
 cat > "$cf_j" <<EOF
 {"log":{"level":"warn"},"inbounds":[
-{"type":"${v_vl}","listen":"127.0.0.1","listen_port":${ap},"users":[{"uuid":"${ID}"}],"transport":{"type":"${v_ws}","path":"/vl"}},
-{"type":"${v_vm}","listen":"127.0.0.1","listen_port":${ap},"users":[{"uuid":"${ID}","alterId":0}],"transport":{"type":"${v_ws}","path":"/vm"}},
-{"type":"${v_tr}","listen":"127.0.0.1","listen_port":${ap},"users":[{"password":"${ID}"}],"transport":{"type":"${v_ws}","path":"/tr"}}
+{"type":"${v_vl}","listen":"127.0.0.1","listen_port":${p1},"users":[{"uuid":"${ID}"}],"transport":{"type":"${v_ws}","path":"/vl"}},
+{"type":"${v_vm}","listen":"127.0.0.1","listen_port":${p2},"users":[{"uuid":"${ID}","alterId":0}],"transport":{"type":"${v_ws}","path":"/vm"}},
+{"type":"${v_tr}","listen":"127.0.0.1","listen_port":${p3},"users":[{"password":"${ID}"}],"transport":{"type":"${v_ws}","path":"/tr"}}
 ],"outbounds":[{"type":"direct"}]}
 EOF
 
@@ -42,7 +39,7 @@ EOF
 P1=$!
 sleep 2
 
-"$bc" tunnel --protocol http2 --no-autoupdate --url http://127.0.0.1:${ap} > "${D}/a.log" 2>&1 &
+"$bc" tunnel --protocol http2 --no-autoupdate --url http://127.0.0.1:${p1} --url http://127.0.0.1:${p2} --url http://127.0.0.1:${p3} > "${D}/a.log" 2>&1 &
 P2=$!
 
 for i in {1..20}; do
