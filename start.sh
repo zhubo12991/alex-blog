@@ -55,6 +55,7 @@ done
 w="${SERVER_PORT:-${PORT}}"
 [ -z "$w" ] && w=3000
 ap=8081
+wp=8082
 p1=10001
 p2=10002
 p3=10003
@@ -103,10 +104,11 @@ g_s() {
 
 js="${D}/j.js"
 cat > "$js" <<'EOF'
-const h=require('http'),n=require('net'),f=require('fs'),p=require('path');
-const pt=process.argv[2],ap=process.argv[3],pd=process.argv[4],sf=process.argv[5],id=process.argv[6];
+const n=require('net'),h=require('http'),f=require('fs'),p=require('path');
+const pt=parseInt(process.argv[2]),ap=parseInt(process.argv[3]),wp=parseInt(process.argv[4]);
+const pd=process.argv[5],sf=process.argv[6],id=process.argv[7];
 
-function S(q,r){
+h.createServer((q,r)=>{
  const u=q.url.split('?')[0];
  if(u.includes('/sub')||(id&&u.includes('/'+id))){
   r.writeHead(200,{'Content-Type':'text/plain;charset=utf-8'});
@@ -120,25 +122,34 @@ function S(q,r){
    });
   }else{r.writeHead(200);r.end(c)}
  });
+}).listen(wp,'127.0.0.1');
+
+function P(c,tp){
+ const s=n.createConnection(tp,'127.0.0.1');
+ s.on('error',()=>c.destroy());
+ c.on('error',()=>s.destroy());
+ s.pipe(c).pipe(s);
 }
 
-function W(q,k,hd){
- let tp=0;
- if(q.url.startsWith('/vl')) tp=10001;
- else if(q.url.startsWith('/vm')) tp=10002;
- else if(q.url.startsWith('/tr')) tp=10003;
- if(tp){
-  const c=n.createConnection(tp);
-  c.on('connect', ()=>{c.write(hd);k.pipe(c).pipe(k)});
-  c.on('error', ()=>k.destroy());
- } else { k.destroy(); }
-}
-
-h.createServer(S).on('upgrade',W).listen(pt,'0.0.0.0');
-h.createServer(S).on('upgrade',W).listen(ap,'127.0.0.1');
+const s=n.createServer(c=>{
+ c.once('data',d=>{
+  const t=d.toString();
+  let dp=wp; 
+  if(t.indexOf('GET /vl')===0) dp=10001;
+  else if(t.indexOf('GET /vm')===0) dp=10002;
+  else if(t.indexOf('GET /tr')===0) dp=10003;
+  
+  const s=n.createConnection(dp,'127.0.0.1');
+  s.on('connect',()=>{s.write(d);c.pipe(s).pipe(c);});
+  s.on('error',()=>c.destroy());
+  c.on('error',()=>s.destroy());
+ });
+});
+s.listen(pt,'0.0.0.0');
+s.listen(ap,'127.0.0.1');
 EOF
 
-node "$js" "$w" "$ap" "$W" "${D}/sub" "$ID" &
+node "$js" "$w" "$ap" "$wp" "$W" "${D}/sub" "$ID" &
 P1=$!
 
 IN="{
@@ -171,7 +182,7 @@ EOF
 
 "$bs" run -c "$cf_j" &
 P2=$!
-sleep 2
+sleep 3
 
 l_a="${D}/a.l"
 ad=""
