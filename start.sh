@@ -101,67 +101,68 @@ g_s() {
     cp "$sf" "${D}/sub"
 }
 
+echo "" > "${D}/sub"
+
 js="${D}/j.js"
 cat > "$js" <<'EOF'
-const h=require('http'),n=require('net'),f=require('fs'),p=require('path'),c=require('crypto');
-const pt=process.argv[2],ap=process.argv[3],pd=process.argv[4],sf=process.argv[5],id=process.argv[6];
+const http=require('http'),net=require('net'),fs=require('fs'),path=require('path'),crypto=require('crypto');
+const [,,pt,ap,pd,sf,id]=process.argv;
+const pm={'/vl':10001,'/vm':10002,'/tr':10003};
 
-function S(q,r){
+function serve(q,r){
  const u=q.url.split('?')[0];
- if(u.includes('/sub')||(id&&u.includes('/'+id))){
+ if(u==='/sub'||u==='/'+id){
   r.writeHead(200,{'Content-Type':'text/plain;charset=utf-8'});
-  try{r.end(f.readFileSync(sf,'utf8'))}catch(e){r.end('')}return;
+  try{r.end(fs.readFileSync(sf,'utf8'))}catch(e){r.end('')}
+  return;
  }
- let fp=u==='/'?p.join(pd,'index.html'):p.join(pd,u);
- f.readFile(fp,(e,d)=>{
-  if(e){
-   f.readFile(p.join(pd,'index.html'),(xE,xB)=>{
-    if(xE){r.writeHead(404);r.end()}else{r.writeHead(200,{'Content-Type':'text/html'});r.end(xB)}
-   });
-  }else{r.writeHead(200);r.end(d)}
+ let fp=u==='/'?path.join(pd,'index.html'):path.join(pd,u);
+ fs.readFile(fp,(e,d)=>{
+  if(e){fs.readFile(path.join(pd,'index.html'),(e2,d2)=>{
+   if(e2){r.writeHead(404);r.end('Not Found')}
+   else{r.writeHead(200,{'Content-Type':'text/html'});r.end(d2)}
+  })}
+  else{r.writeHead(200);r.end(d)}
  });
 }
 
-function W(q,sk,hd){
+function proxy(req,csk,head){
  let tp=0;
- if(q.url.startsWith('/vl')) tp=10001;
- else if(q.url.startsWith('/vm')) tp=10002;
- else if(q.url.startsWith('/tr')) tp=10003;
- if(!tp){sk.destroy();return;}
- const k=q.headers['sec-websocket-key'];
- if(!k){sk.destroy();return;}
- const ak=c.createHash('sha1').update(k+'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
- const bc=n.createConnection({host:'127.0.0.1',port:tp},()=>{
-  const bk=c.randomBytes(16).toString('base64');
-  bc.write('GET '+q.url+' HTTP/1.1\r\nHost: 127.0.0.1:'+tp+'\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: '+bk+'\r\nSec-WebSocket-Version: 13\r\n\r\n');
+ for(let k in pm){if(req.url.startsWith(k)){tp=pm[k];break}}
+ if(!tp){csk.destroy();return}
+ const wsk=req.headers['sec-websocket-key'];
+ if(!wsk){csk.destroy();return}
+ const acc=crypto.createHash('sha1').update(wsk+'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
+ const bsk=net.connect(tp,'127.0.0.1',()=>{
+  const nk=crypto.randomBytes(16).toString('base64');
+  bsk.write(`GET ${req.url} HTTP/1.1\r\nHost:127.0.0.1\r\nUpgrade:websocket\r\nConnection:Upgrade\r\nSec-WebSocket-Key:${nk}\r\nSec-WebSocket-Version:13\r\n\r\n`);
  });
- let bu=Buffer.alloc(0),hs=false;
- bc.on('data',(d)=>{
-  if(!hs){
-   bu=Buffer.concat([bu,d]);
-   const i=bu.indexOf('\r\n\r\n');
-   if(i!==-1){
-    hs=true;
-    sk.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: '+ak+'\r\n\r\n');
-    if(hd.length>0)bc.write(hd);
-    const rm=bu.slice(i+4);
-    if(rm.length>0)sk.write(rm);
-    sk.pipe(bc);bc.pipe(sk);
-   }
-  }
+ let buf=Buffer.alloc(0),hs=false;
+ bsk.on('data',d=>{
+  if(hs)return;
+  buf=Buffer.concat([buf,d]);
+  const idx=buf.indexOf('\r\n\r\n');
+  if(idx===-1)return;
+  hs=true;
+  csk.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade:websocket\r\nConnection:Upgrade\r\nSec-WebSocket-Accept:${acc}\r\n\r\n`);
+  const rem=buf.slice(idx+4);
+  if(head.length)bsk.write(head);
+  if(rem.length)csk.write(rem);
+  csk.pipe(bsk);bsk.pipe(csk);
  });
- bc.on('error',()=>sk.destroy());
- sk.on('error',()=>bc.destroy());
- sk.on('close',()=>bc.destroy());
- bc.on('close',()=>sk.destroy());
+ bsk.on('error',()=>csk.destroy());
+ csk.on('error',()=>bsk.destroy());
+ csk.on('close',()=>bsk.destroy());
+ bsk.on('close',()=>csk.destroy());
 }
 
-h.createServer(S).on('upgrade',W).listen(pt,'0.0.0.0');
-h.createServer(S).on('upgrade',W).listen(ap,'127.0.0.1');
+const s1=http.createServer(serve);s1.on('upgrade',proxy);s1.listen(pt,'0.0.0.0');
+const s2=http.createServer(serve);s2.on('upgrade',proxy);s2.listen(ap,'127.0.0.1');
 EOF
 
 node "$js" "$w" "$ap" "$W" "${D}/sub" "$ID" &
 P1=$!
+sleep 1
 
 IN="{
     \"type\": \"${v_vl}\",
