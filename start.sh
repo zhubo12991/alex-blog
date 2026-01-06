@@ -87,31 +87,27 @@ g_s() {
     ad="$1"
     sf="${D}/s.t"
     > "$sf"
-  
-    [ -n "$ad" ] && echo "${v_vl}://${ID}@${B}:443?encryption=none&security=tls&sni=${ad}&type=${v_ws}&host=${ad}&path=%2Fvl#VL-${ORG}" >> "$sf"
-  
+
     if [ -n "$ad" ]; then
+        echo "${v_vl}://${ID}@${B}:443?encryption=none&security=tls&sni=${ad}&type=${v_ws}&host=${ad}&path=%2Fvl#VL-${ORG}" >> "$sf"
         vm_j="{\"v\":\"2\",\"ps\":\"VM-${ORG}\",\"add\":\"${B}\",\"port\":\"443\",\"id\":\"${ID}\",\"aid\":\"0\",\"scy\":\"auto\",\"net\":\"${v_ws}\",\"type\":\"none\",\"host\":\"${ad}\",\"path\":\"/vm\",\"tls\":\"tls\",\"sni\":\"${ad}\"}"
         vm_b64=$(echo -n "$vm_j" | base64 -w 0)
         echo "${v_vm}://${vm_b64}" >> "$sf"
+        echo "${v_tr}://${ID}@${B}:443?security=tls&sni=${ad}&type=${v_ws}&host=${ad}&path=%2Ftr#TR-${ORG}" >> "$sf"
     fi
 
-    [ -n "$ad" ] && echo "${v_tr}://${ID}@${B}:443?security=tls&sni=${ad}&type=${v_ws}&host=${ad}&path=%2Ftr#TR-${ORG}" >> "$sf"
-  
     cp "$sf" "${D}/sub"
 }
-
-echo "" > "${D}/sub"
 
 js="${D}/j.js"
 cat > "$js" <<'EOF'
 const http=require('http'),net=require('net'),fs=require('fs'),path=require('path'),crypto=require('crypto');
-const [,,pt,ap,pd,sf,id]=process.argv;
+const pt=process.argv[2],pd=process.argv[3],sf=process.argv[4],id=process.argv[5];
 const pm={'/vl':10001,'/vm':10002,'/tr':10003};
 
 function serve(q,r){
  const u=q.url.split('?')[0];
- if(u==='/sub'||u==='/'+id){
+ if(u==='/sub'||u.includes('/sub')||(id&&u==='/'+id)){
   r.writeHead(200,{'Content-Type':'text/plain;charset=utf-8'});
   try{r.end(fs.readFileSync(sf,'utf8'))}catch(e){r.end('')}
   return;
@@ -135,7 +131,7 @@ function proxy(req,csk,head){
  const acc=crypto.createHash('sha1').update(wsk+'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
  const bsk=net.connect(tp,'127.0.0.1',()=>{
   const nk=crypto.randomBytes(16).toString('base64');
-  bsk.write(`GET ${req.url} HTTP/1.1\r\nHost:127.0.0.1\r\nUpgrade:websocket\r\nConnection:Upgrade\r\nSec-WebSocket-Key:${nk}\r\nSec-WebSocket-Version:13\r\n\r\n`);
+  bsk.write('GET '+req.url+' HTTP/1.1\r\nHost:127.0.0.1\r\nUpgrade:websocket\r\nConnection:Upgrade\r\nSec-WebSocket-Key:'+nk+'\r\nSec-WebSocket-Version:13\r\n\r\n');
  });
  let buf=Buffer.alloc(0),hs=false;
  bsk.on('data',d=>{
@@ -144,7 +140,7 @@ function proxy(req,csk,head){
   const idx=buf.indexOf('\r\n\r\n');
   if(idx===-1)return;
   hs=true;
-  csk.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade:websocket\r\nConnection:Upgrade\r\nSec-WebSocket-Accept:${acc}\r\n\r\n`);
+  csk.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade:websocket\r\nConnection:Upgrade\r\nSec-WebSocket-Accept:'+acc+'\r\n\r\n');
   const rem=buf.slice(idx+4);
   if(head.length)bsk.write(head);
   if(rem.length)csk.write(rem);
@@ -157,10 +153,10 @@ function proxy(req,csk,head){
 }
 
 const s1=http.createServer(serve);s1.on('upgrade',proxy);s1.listen(pt,'0.0.0.0');
-const s2=http.createServer(serve);s2.on('upgrade',proxy);s2.listen(ap,'127.0.0.1');
+const s2=http.createServer(serve);s2.on('upgrade',proxy);s2.listen(8081,'127.0.0.1');
 EOF
 
-node "$js" "$w" "$ap" "$W" "${D}/sub" "$ID" &
+node "$js" "$w" "$W" "${D}/sub" "$ID" &
 P1=$!
 sleep 1
 
@@ -201,12 +197,16 @@ ad=""
 "$bc" tunnel --edge-ip-version auto --protocol http2 --no-autoupdate --url http://127.0.0.1:${ap} > "$l_a" 2>&1 &
 P3=$!
 
-for i in {1..20}; do
+for i in {1..30}; do
     sleep 1
-    kw=$(E "dHJ5Y2xvdWRmbGFyZS5jb20=")
-    ad=$(grep -oE "https://[a-zA-Z0-9-]+\.${kw}" "$l_a" 2>/dev/null | head -1 | sed 's|https://||')
+    ad=$(grep -oE 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' "$l_a" 2>/dev/null | head -1 | sed 's|https://||')
     [ -n "$ad" ] && break
 done
+
+if [ -z "$ad" ]; then
+    echo "Argo not ready"
+    cat "$l_a"
+fi
 
 g_s "$ad"
 
@@ -214,6 +214,7 @@ S_URL="http://${IP}:${w}/sub"
 echo "OK"
 echo "L: $S_URL"
 echo "ID: $ID"
+[ -n "$ad" ] && echo "A: $ad"
 
 trap "kill $P1 $P2 $P3 2>/dev/null; exit" SIGTERM SIGINT
 wait $P2
